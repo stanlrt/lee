@@ -2,21 +2,21 @@ import { exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
+import type {
+  GroupMetadata,
+  proto as ProtoTypes,
+  WAMessageKey,
+  WASocket,
+} from '@whiskeysockets/baileys';
 import {
-  makeWASocket,
   Browsers,
   DisconnectReason,
   downloadMediaMessage,
   fetchLatestWaWebVersion,
   makeCacheableSignalKeyStore,
+  makeWASocket,
   normalizeMessageContent,
   useMultiFileAuthState,
-} from '@whiskeysockets/baileys';
-import type {
-  GroupMetadata,
-  WAMessageKey,
-  WASocket,
-  proto as ProtoTypes,
 } from '@whiskeysockets/baileys';
 // proto is not statically analyzable as a named ESM export from this CJS module
 import { createRequire } from 'module';
@@ -24,6 +24,7 @@ const { proto } = createRequire(import.meta.url)('@whiskeysockets/baileys') as {
   proto: typeof ProtoTypes;
 };
 
+import pino from 'pino';
 import {
   ASSISTANT_HAS_OWN_NUMBER,
   ASSISTANT_NAME,
@@ -36,18 +37,17 @@ import {
   updateChatName,
 } from '../db.js';
 import { logger } from '../logger.js';
-import pino from 'pino';
+import { transcribeAudio } from '../transcription.js';
+import {
+  Channel,
+  OnChatMetadata,
+  OnInboundMessage,
+  RegisteredGroup,
+} from '../types.js';
+import { ChannelOpts, registerChannel } from './registry.js';
 
 // Baileys requires a pino-compatible logger instance
 const baileysLogger = pino({ level: 'silent' });
-import {
-  Channel,
-  OnInboundMessage,
-  OnChatMetadata,
-  RegisteredGroup,
-} from '../types.js';
-import { registerChannel, ChannelOpts } from './registry.js';
-import { transcribeAudio } from '../transcription.js';
 
 const GROUP_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -234,11 +234,17 @@ export class WhatsAppChannel implements Channel {
 
     this.sock.ev.on('creds.update', saveCreds);
 
-    // @ts-ignore — event exists at runtime but not in current Baileys typedefs
-    this.sock.ev.on(
-      'chats.phoneNumberShare',
+    // Event exists at runtime but is missing in current Baileys type defs.
+    const evWithPhoneNumberShare = this.sock.ev as typeof this.sock.ev & {
+      on(
+        event: "chats.phoneNumberShare",
+        listener: (payload: { lid?: string; jid?: string }) => void,
+      ): void;
+    };
+    evWithPhoneNumberShare.on(
+      "chats.phoneNumberShare",
       ({ lid, jid }: { lid?: string; jid?: string }) => {
-        const lidUser = lid?.split('@')[0].split(':')[0];
+        const lidUser = lid?.split("@")[0].split(":")[0];
         if (lidUser && jid) {
           this.setLidPhoneMapping(lidUser, jid);
         }
