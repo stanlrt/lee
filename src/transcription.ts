@@ -7,7 +7,8 @@ export async function transcribeAudio(
   mimeType: string,
 ): Promise<string> {
   const apiKey =
-    process.env.GEMINI_API_KEY || readEnvFile(['GEMINI_API_KEY']).GEMINI_API_KEY;
+    process.env.GEMINI_API_KEY ||
+    readEnvFile(['GEMINI_API_KEY']).GEMINI_API_KEY;
   if (!apiKey) {
     logger.warn('GEMINI_API_KEY not set — voice transcription unavailable');
     return '[Voice message — transcription unavailable]';

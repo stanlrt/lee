@@ -149,11 +149,17 @@ function buildVolumeMounts(
   };
 
   if (!fs.existsSync(settingsFile)) {
-    fs.writeFileSync(settingsFile, JSON.stringify(baseSettings, null, 2) + '\n');
+    fs.writeFileSync(
+      settingsFile,
+      JSON.stringify(baseSettings, null, 2) + '\n',
+    );
   } else {
     // Merge MCP servers into existing settings so agent-added config is preserved
     const existing = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
-    existing.mcpServers = { ...existing.mcpServers, ...baseSettings.mcpServers };
+    existing.mcpServers = {
+      ...existing.mcpServers,
+      ...baseSettings.mcpServers,
+    };
     fs.writeFileSync(settingsFile, JSON.stringify(existing, null, 2) + '\n');
   }
 

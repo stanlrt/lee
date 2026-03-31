@@ -20,10 +20,10 @@
 // which it does unreliably.
 const ESCALATION_PATTERN = /\b(use\s+(the\s+)?(smart|heavy|strong|powerful|best|slow|thinking|reasoning|hard|complex|big)\s*(model|task|llm|ai|mode)?|think\s+(harder|deeply|carefully|more)|reasoning\s+model|complex\s+mode|hard\s+mode|full\s+power|use\s+claude)\b/i;
 
+import { HookCallback, PreCompactHookInput, query } from '@anthropic-ai/claude-agent-sdk';
+import { execFile } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { execFile } from 'child_process';
-import { query, HookCallback, PreCompactHookInput } from '@anthropic-ai/claude-agent-sdk';
 import { fileURLToPath } from 'url';
 
 interface ContainerInput {
@@ -442,6 +442,10 @@ async function runQuery(
           command: 'github-mcp-server',
           args: ['stdio'],
           env: { GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GITHUB_TOKEN || '' },
+        },
+        cognee: {
+          type: 'sse',
+          url: process.env.COGNEE_MCP_URL || 'http://host.docker.internal:8765/sse',
         },
       },
       hooks: {

@@ -235,12 +235,15 @@ export class WhatsAppChannel implements Channel {
     this.sock.ev.on('creds.update', saveCreds);
 
     // @ts-ignore — event exists at runtime but not in current Baileys typedefs
-    this.sock.ev.on('chats.phoneNumberShare', ({ lid, jid }: { lid?: string; jid?: string }) => {
-      const lidUser = lid?.split('@')[0].split(':')[0];
-      if (lidUser && jid) {
-        this.setLidPhoneMapping(lidUser, jid);
-      }
-    });
+    this.sock.ev.on(
+      'chats.phoneNumberShare',
+      ({ lid, jid }: { lid?: string; jid?: string }) => {
+        const lidUser = lid?.split('@')[0].split(':')[0];
+        if (lidUser && jid) {
+          this.setLidPhoneMapping(lidUser, jid);
+        }
+      },
+    );
 
     this.sock.ev.on('messages.upsert', async ({ messages }) => {
       for (const msg of messages) {
@@ -304,10 +307,16 @@ export class WhatsAppChannel implements Channel {
                   'buffer',
                   {},
                 )) as Buffer;
-                const transcript = await transcribeAudio(audioBuffer, 'audio/ogg');
+                const transcript = await transcribeAudio(
+                  audioBuffer,
+                  'audio/ogg',
+                );
                 content = `[Voice: ${transcript}]`;
               } catch (err) {
-                logger.error({ err }, 'Failed to transcribe WhatsApp voice message');
+                logger.error(
+                  { err },
+                  'Failed to transcribe WhatsApp voice message',
+                );
                 content = '[Voice message — transcription failed]';
               }
             }

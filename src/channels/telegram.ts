@@ -215,11 +215,13 @@ export class TelegramChannel implements Channel {
         const fileUrl = `https://api.telegram.org/file/bot${this.botToken}/${file.file_path}`;
         const audioBuffer = await new Promise<Buffer>((resolve, reject) => {
           const chunks: Buffer[] = [];
-          https.get(fileUrl, (res) => {
-            res.on('data', (chunk) => chunks.push(chunk));
-            res.on('end', () => resolve(Buffer.concat(chunks)));
-            res.on('error', reject);
-          }).on('error', reject);
+          https
+            .get(fileUrl, (res) => {
+              res.on('data', (chunk) => chunks.push(chunk));
+              res.on('end', () => resolve(Buffer.concat(chunks)));
+              res.on('error', reject);
+            })
+            .on('error', reject);
         });
         const transcript = await transcribeAudio(audioBuffer, 'audio/ogg');
         placeholder = `[Voice: ${transcript}]`;

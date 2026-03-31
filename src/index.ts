@@ -578,7 +578,10 @@ async function main(): Promise<void> {
   // latest code, settings, and MCP connections are always used.
   const clearedSessions = clearAllSessions();
   if (clearedSessions > 0) {
-    logger.info({ count: clearedSessions }, 'Cleared stale sessions on startup');
+    logger.info(
+      { count: clearedSessions },
+      'Cleared stale sessions on startup',
+    );
   }
 
   loadState();

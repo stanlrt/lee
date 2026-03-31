@@ -40,9 +40,11 @@ Notes:
 - If your runtime cannot resolve `host.docker.internal`, set:
   - `COGNEE_MCP_URL=http://172.17.0.1:8765/sse`
 
-## Optional Host-Side Config Consistency
+## Optional Host-Side URL Consistency
 
-For consistency with runtime defaults, you can also align the generated per-group settings in `src/container-runner.ts` to use the same URL strategy. This is optional for the immediate fix but reduces future drift.
+`src/container-runner.ts` already injects a `cognee` MCP server into per-group settings.
+
+For consistency with runtime defaults, you can align the host-side default URL strategy there with this guide (for example, prefer `COGNEE_MCP_URL` and/or `host.docker.internal` with bridge-IP fallback). This is optional for the immediate fix but reduces future drift.
 
 ## Verification Checklist
 
