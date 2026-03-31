@@ -1,5 +1,6 @@
 import https from 'https';
 import { Api, Bot } from 'grammy';
+import { transcribeAudio } from '../transcription.js';
 
 import { ASSISTANT_NAME, TRIGGER_PATTERN } from '../config.js';
 import { readEnvFile } from '../env.js';
@@ -203,7 +204,31 @@ export class TelegramChannel implements Channel {
 
     this.bot.on('message:photo', (ctx) => storeNonText(ctx, '[Photo]'));
     this.bot.on('message:video', (ctx) => storeNonText(ctx, '[Video]'));
-    this.bot.on('message:voice', (ctx) => storeNonText(ctx, '[Voice message]'));
+    this.bot.on('message:voice', async (ctx) => {
+      const chatJid = `tg:${ctx.chat.id}`;
+      const group = this.opts.registeredGroups()[chatJid];
+      if (!group) return;
+
+      let placeholder = '[Voice message]';
+      try {
+        const file = await ctx.api.getFile(ctx.message.voice.file_id);
+        const fileUrl = `https://api.telegram.org/file/bot${this.botToken}/${file.file_path}`;
+        const audioBuffer = await new Promise<Buffer>((resolve, reject) => {
+          const chunks: Buffer[] = [];
+          https.get(fileUrl, (res) => {
+            res.on('data', (chunk) => chunks.push(chunk));
+            res.on('end', () => resolve(Buffer.concat(chunks)));
+            res.on('error', reject);
+          }).on('error', reject);
+        });
+        const transcript = await transcribeAudio(audioBuffer, 'audio/ogg');
+        placeholder = `[Voice: ${transcript}]`;
+      } catch (err) {
+        logger.error({ err }, 'Failed to transcribe Telegram voice message');
+      }
+
+      storeNonText(ctx, placeholder);
+    });
     this.bot.on('message:audio', (ctx) => storeNonText(ctx, '[Audio]'));
     this.bot.on('message:document', (ctx) => {
       const name = ctx.message.document?.file_name || 'file';

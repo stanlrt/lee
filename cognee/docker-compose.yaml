@@ -1,0 +1,21 @@
+services:
+  cognee-mcp:
+    build: .
+    container_name: cognee-mcp
+    ports:
+      - "172.17.0.1:8765:8765"
+    volumes:
+      - ./mcp_server.py:/app/mcp_server.py:ro
+      - ./.venv/lib/python3.12/site-packages:/venv-packages:ro
+      - ./data:/app/data
+    env_file:
+      - ../.env
+      - ./.env
+    environment:
+      - DATA_ROOT_DIRECTORY=/app/data/cognee_data
+      - SYSTEM_ROOT_DIRECTORY=/app/data/cognee_system
+      - PYTHONPATH=/venv-packages
+    working_dir: /app
+    user: "1001:1001"
+    command: ["python3", "mcp_server.py"]
+    restart: unless-stopped

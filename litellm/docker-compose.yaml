@@ -1,0 +1,14 @@
+services:
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm-proxy
+    ports:
+      # Bind to Docker bridge only — not accessible from the public internet.
+      # Agent containers reach it at 172.17.0.1:4000.
+      - "172.17.0.1:4000:4000"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0"]
+    env_file:
+      - .env
+    restart: unless-stopped

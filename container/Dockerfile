@@ -31,7 +31,11 @@ ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Install agent-browser and claude-code globally
-RUN npm install -g agent-browser @anthropic-ai/claude-code
+RUN npm install -g agent-browser @anthropic-ai/claude-code @gongrzhe/server-gmail-autoauth-mcp
+
+# Install GitHub MCP server
+RUN curl -fsSL https://github.com/github/github-mcp-server/releases/download/v0.32.0/github-mcp-server_Linux_x86_64.tar.gz \
+    | tar -xz -C /usr/local/bin/ github-mcp-server
 
 # Create app directory
 WORKDIR /app

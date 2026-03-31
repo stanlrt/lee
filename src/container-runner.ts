@@ -18,6 +18,7 @@ import {
   TIMEZONE,
 } from './config.js';
 import { resolveGroupFolderPath, resolveGroupIpcPath } from './group-folder.js';
+import { readEnvFile } from './env.js';
 import { logger } from './logger.js';
 import {
   CONTAINER_RUNTIME_BIN,
@@ -126,27 +127,34 @@ function buildVolumeMounts(
   );
   fs.mkdirSync(groupSessionsDir, { recursive: true });
   const settingsFile = path.join(groupSessionsDir, 'settings.json');
+  const baseSettings = {
+    env: {
+      // Enable agent swarms (subagent orchestration)
+      // https://code.claude.com/docs/en/agent-teams#orchestrate-teams-of-claude-code-sessions
+      CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+      // Load CLAUDE.md from additional mounted directories
+      // https://code.claude.com/docs/en/memory#load-memory-from-additional-directories
+      CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',
+      // Enable Claude's memory feature (persists user preferences between sessions)
+      // https://code.claude.com/docs/en/memory#manage-auto-memory
+      CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0',
+    },
+    mcpServers: {
+      // Cognee knowledge graph — runs in Docker, published on bridge IP
+      cognee: {
+        url: 'http://172.17.0.1:8765/sse',
+        type: 'sse',
+      },
+    },
+  };
+
   if (!fs.existsSync(settingsFile)) {
-    fs.writeFileSync(
-      settingsFile,
-      JSON.stringify(
-        {
-          env: {
-            // Enable agent swarms (subagent orchestration)
-            // https://code.claude.com/docs/en/agent-teams#orchestrate-teams-of-claude-code-sessions
-            CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
-            // Load CLAUDE.md from additional mounted directories
-            // https://code.claude.com/docs/en/memory#load-memory-from-additional-directories
-            CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',
-            // Enable Claude's memory feature (persists user preferences between sessions)
-            // https://code.claude.com/docs/en/memory#manage-auto-memory
-            CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0',
-          },
-        },
-        null,
-        2,
-      ) + '\n',
-    );
+    fs.writeFileSync(settingsFile, JSON.stringify(baseSettings, null, 2) + '\n');
+  } else {
+    // Merge MCP servers into existing settings so agent-added config is preserved
+    const existing = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+    existing.mcpServers = { ...existing.mcpServers, ...baseSettings.mcpServers };
+    fs.writeFileSync(settingsFile, JSON.stringify(existing, null, 2) + '\n');
   }
 
   // Sync skills from container/skills/ into each group's .claude/skills/
@@ -245,6 +253,12 @@ async function buildContainerArgs(
   // Pass host timezone so container's local time matches the user's
   args.push('-e', `TZ=${TIMEZONE}`);
 
+  // Inject third-party API tokens read from .env on the host
+  const hostEnv = readEnvFile(['GITHUB_TOKEN']);
+  if (hostEnv.GITHUB_TOKEN) {
+    args.push('-e', `GITHUB_TOKEN=${hostEnv.GITHUB_TOKEN}`);
+  }
+
   // OneCLI gateway handles credential injection — containers never see real secrets.
   // The gateway intercepts HTTPS traffic and injects API keys or OAuth tokens.
   const onecliApplied = await onecli.applyContainerConfig(args, {
@@ -259,6 +273,17 @@ async function buildContainerArgs(
       'OneCLI gateway not reachable — container will have no credentials',
     );
   }
+
+  // Route all LLM calls through the LiteLLM proxy on the host.
+  // claude-haiku-4-5-20251001 is mapped to Gemini Flash in litellm/config.yaml.
+  // Added AFTER OneCLI so these values take precedence.
+  // Use bridge IP directly to bypass OneCLI hostname-based interception.
+  args.push('-e', 'ANTHROPIC_BASE_URL=http://172.17.0.1:4000');
+  args.push('-e', 'ANTHROPIC_MODEL=claude-haiku-4-5-20251001');
+  args.push('-e', 'LITELLM_API_KEY=sk-nanoclaw');
+  // Exclude LiteLLM proxy IP from OneCLI's HTTP proxy so calls go direct.
+  args.push('-e', 'NO_PROXY=host.docker.internal,172.17.0.1');
+  args.push('-e', 'no_proxy=host.docker.internal,172.17.0.1');
 
   // Runtime-specific args for host gateway resolution
   args.push(...hostGatewayArgs());

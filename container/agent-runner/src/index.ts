@@ -14,6 +14,12 @@
  *   Final marker after loop ends signals completion.
  */
 
+// Matches phrases that explicitly request the heavy/reasoning model.
+// When detected in the initial prompt, we call LiteLLM directly instead of
+// relying on the light model (Gemini Flash) to invoke the heavy_task tool —
+// which it does unreliably.
+const ESCALATION_PATTERN = /\b(use\s+(the\s+)?(smart|heavy|strong|powerful|best|slow|thinking|reasoning|hard|complex|big)\s*(model|task|llm|ai|mode)?|think\s+(harder|deeply|carefully|more)|reasoning\s+model|complex\s+mode|hard\s+mode|full\s+power|use\s+claude)\b/i;
+
 import fs from 'fs';
 import path from 'path';
 import { execFile } from 'child_process';
@@ -411,6 +417,8 @@ async function runQuery(
         'NotebookEdit',
         'mcp__nanoclaw__*',
         'mcp__gmail__*',
+        'mcp__github__*',
+        'mcp__cognee__*',
       ],
       env: sdkEnv,
       permissionMode: 'bypassPermissions',
@@ -427,8 +435,13 @@ async function runQuery(
           },
         },
         gmail: {
-          command: 'npx',
-          args: ['-y', '@gongrzhe/server-gmail-autoauth-mcp'],
+          command: 'gmail-mcp',
+          args: [],
+        },
+        github: {
+          command: 'github-mcp-server',
+          args: ['stdio'],
+          env: { GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GITHUB_TOKEN || '' },
         },
       },
       hooks: {
@@ -520,6 +533,64 @@ async function runScript(script: string): Promise<ScriptResult | null> {
   });
 }
 
+/**
+ * If the prompt contains an explicit escalation trigger, call Claude Sonnet
+ * directly via LiteLLM and return the labeled response. Returns null if no
+ * trigger is detected or if the heavy model call fails (caller falls through
+ * to the normal Gemini query in that case).
+ */
+async function tryHeavyModel(prompt: string): Promise<string | null> {
+  if (!ESCALATION_PATTERN.test(prompt)) return null;
+
+  log('Escalation trigger detected, calling heavy model directly');
+  const litellmUrl = 'http://172.17.0.1:4000/v1/messages';
+  const apiKey = process.env.LITELLM_API_KEY || 'sk-nanoclaw';
+
+  let response: Response;
+  try {
+    response = await fetch(litellmUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 8192,
+        messages: [{ role: 'user', content: prompt }],
+        system: 'You are a powerful reasoning model. Answer thoroughly and accurately.',
+      }),
+    });
+  } catch (err) {
+    log(`Heavy model network error: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    log(`Heavy model HTTP error ${response.status}: ${text.slice(0, 200)}`);
+    return null;
+  }
+
+  const data = await response.json() as {
+    content?: Array<{ type: string; text?: string }>;
+    error?: { message: string };
+  };
+
+  if (data.error) {
+    log(`Heavy model API error: ${data.error.message}`);
+    return null;
+  }
+
+  const text = data.content
+    ?.filter(b => b.type === 'text')
+    .map(b => b.text ?? '')
+    .join('') ?? '';
+
+  return `🧠 **Reasoning model:**\n\n${text}`;
+}
+
 async function main(): Promise<void> {
   let containerInput: ContainerInput;
 
@@ -579,6 +650,17 @@ async function main(): Promise<void> {
     // Script says wake agent — enrich prompt with script data
     log(`Script wakeAgent=true, enriching prompt with data`);
     prompt = `[SCHEDULED TASK]\n\nScript output:\n${JSON.stringify(scriptResult.data, null, 2)}\n\nInstructions:\n${containerInput.prompt}`;
+  }
+
+  // Pre-process: if the prompt contains an escalation trigger, call the heavy
+  // model directly rather than relying on Gemini to invoke heavy_task (unreliable).
+  // Only for user-initiated prompts, not scheduled tasks.
+  if (!containerInput.isScheduledTask) {
+    const heavyResult = await tryHeavyModel(prompt);
+    if (heavyResult !== null) {
+      writeOutput({ status: 'success', result: heavyResult });
+      return;
+    }
   }
 
   // Query loop: run query → wait for IPC message → run new query → repeat

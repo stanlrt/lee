@@ -337,6 +337,79 @@ Use available_groups.json to find the JID for a group. The folder name must be c
   },
 );
 
+server.tool(
+  'heavy_task',
+  `Delegate a task that requires deep reasoning or complex analysis to Claude Sonnet.
+Use this when the task involves: multi-step reasoning, code generation or debugging, nuanced judgment, detailed analysis, or anything where accuracy matters more than speed.
+Pass the full context needed — Claude Sonnet has no memory of the current conversation.`,
+  {
+    prompt: z.string().describe('Full self-contained prompt for Claude Sonnet, including all context needed to answer'),
+    system: z.string().optional().describe('Optional system prompt to set Claude\'s role or constraints'),
+  },
+  async (args) => {
+    const litellmUrl = 'http://172.17.0.1:4000/v1/messages';
+    const apiKey = process.env.LITELLM_API_KEY || 'sk-nanoclaw';
+
+    const defaultSystem = 'You are a powerful reasoning model. Answer thoroughly and accurately.';
+    const body: Record<string, unknown> = {
+      model: 'claude-sonnet-4-5',
+      max_tokens: 8192,
+      messages: [{ role: 'user', content: args.prompt }],
+      system: args.system ?? defaultSystem,
+    };
+
+    let response: Response;
+    try {
+      response = await fetch(litellmUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        content: [{ type: 'text' as const, text: `⚠️ *Reasoning model unavailable (network error: ${msg}) — answer below is from the light model.*` }],
+      };
+    }
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      // Extract a human-readable message from the error body if possible
+      let detail = text.slice(0, 300);
+      try {
+        const parsed = JSON.parse(text);
+        detail = parsed?.error?.message ?? parsed?.message ?? detail;
+      } catch { /* ignore */ }
+      return {
+        content: [{ type: 'text' as const, text: `⚠️ *Reasoning model unavailable (${response.status}: ${detail}) — answer below is from the light model.*` }],
+      };
+    }
+
+    const data = await response.json() as {
+      content?: Array<{ type: string; text?: string }>;
+      error?: { message: string };
+    };
+
+    if (data.error) {
+      return {
+        content: [{ type: 'text' as const, text: `⚠️ *Reasoning model unavailable (${data.error.message}) — answer below is from the light model.*` }],
+      };
+    }
+
+    const text = data.content
+      ?.filter(b => b.type === 'text')
+      .map(b => b.text ?? '')
+      .join('') ?? '';
+
+    const labeled = `🧠 **Reasoning model:**\n\n${text}`;
+    return { content: [{ type: 'text' as const, text: labeled }] };
+  },
+);
+
 // Start the stdio transport
 const transport = new StdioServerTransport();
 await server.connect(transport);

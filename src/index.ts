@@ -30,6 +30,7 @@ import {
   ensureContainerRuntimeRunning,
 } from './container-runtime.js';
 import {
+  clearAllSessions,
   getAllChats,
   getAllRegisteredGroups,
   getAllSessions,
@@ -410,7 +411,9 @@ async function runAgent(
       const isStaleSession =
         sessionId &&
         output.error &&
-        /no conversation found|ENOENT.*\.jsonl|session.*not found/i.test(output.error);
+        /no conversation found|ENOENT.*\.jsonl|session.*not found/i.test(
+          output.error,
+        );
 
       if (isStaleSession) {
         logger.warn(
@@ -569,6 +572,15 @@ async function main(): Promise<void> {
   ensureContainerSystemRunning();
   initDatabase();
   logger.info('Database initialized');
+
+  // Clear stale sessions from before this restart. Containers were already
+  // stopped by cleanupOrphans(); clearing sessions forces fresh starts so the
+  // latest code, settings, and MCP connections are always used.
+  const clearedSessions = clearAllSessions();
+  if (clearedSessions > 0) {
+    logger.info({ count: clearedSessions }, 'Cleared stale sessions on startup');
+  }
+
   loadState();
 
   // Ensure OneCLI agents exist for all registered groups.

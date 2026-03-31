@@ -36,3 +36,10 @@ groups/global/*
 .nanoclaw/
 
 agents-sdk-docs
+
+# Cognee
+cognee/.venv/
+cognee/data/
+
+# LiteLLM
+litellm/.env
