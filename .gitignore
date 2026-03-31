@@ -43,3 +43,4 @@ cognee/data/
 
 # LiteLLM
 litellm/.env
+*.swp
