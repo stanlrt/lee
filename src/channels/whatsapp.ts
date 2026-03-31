@@ -237,14 +237,14 @@ export class WhatsAppChannel implements Channel {
     // Event exists at runtime but is missing in current Baileys type defs.
     const evWithPhoneNumberShare = this.sock.ev as typeof this.sock.ev & {
       on(
-        event: "chats.phoneNumberShare",
+        event: 'chats.phoneNumberShare',
         listener: (payload: { lid?: string; jid?: string }) => void,
       ): void;
     };
     evWithPhoneNumberShare.on(
-      "chats.phoneNumberShare",
+      'chats.phoneNumberShare',
       ({ lid, jid }: { lid?: string; jid?: string }) => {
-        const lidUser = lid?.split("@")[0].split(":")[0];
+        const lidUser = lid?.split('@')[0].split(':')[0];
         if (lidUser && jid) {
           this.setLidPhoneMapping(lidUser, jid);
         }
