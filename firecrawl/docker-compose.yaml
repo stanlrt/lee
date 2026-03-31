@@ -1,0 +1,22 @@
+services:
+  firecrawl-api:
+    image: ${FIRECRAWL_IMAGE:-ghcr.io/firecrawl/firecrawl:latest}
+    container_name: firecrawl-api
+    ports:
+      - "172.17.0.1:3002:3002"
+    env_file:
+      - ../.env
+      - ./.env
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3002
+      - USE_DB_AUTHENTICATION=false
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: firecrawl-redis
+    restart: unless-stopped

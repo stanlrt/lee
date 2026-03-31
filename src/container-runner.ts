@@ -7,6 +7,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
+import { OneCLI } from '@onecli-sh/sdk';
 import {
   CONTAINER_IMAGE,
   CONTAINER_MAX_OUTPUT_SIZE,
@@ -17,16 +18,15 @@ import {
   ONECLI_URL,
   TIMEZONE,
 } from './config.js';
-import { resolveGroupFolderPath, resolveGroupIpcPath } from './group-folder.js';
-import { readEnvFile } from './env.js';
-import { logger } from './logger.js';
 import {
   CONTAINER_RUNTIME_BIN,
   hostGatewayArgs,
   readonlyMountArgs,
   stopContainer,
 } from './container-runtime.js';
-import { OneCLI } from '@onecli-sh/sdk';
+import { readEnvFile } from './env.js';
+import { resolveGroupFolderPath, resolveGroupIpcPath } from './group-folder.js';
+import { logger } from './logger.js';
 import { validateAdditionalMounts } from './mount-security.js';
 import { RegisteredGroup } from './types.js';
 
@@ -127,6 +127,33 @@ function buildVolumeMounts(
   );
   fs.mkdirSync(groupSessionsDir, { recursive: true });
   const settingsFile = path.join(groupSessionsDir, 'settings.json');
+  const firecrawlSettingsEnv = readEnvFile([
+    'FIRECRAWL_API_URL',
+    'FIRECRAWL_API_KEY',
+  ]);
+  const mcpServers: Record<
+    string,
+    | { url: string; type: 'sse' }
+    | { command: string; args: string[]; env: Record<string, string> }
+  > = {
+    // Cognee knowledge graph — runs in Docker, published on bridge IP
+    cognee: {
+      url: 'http://172.17.0.1:8765/sse',
+      type: 'sse',
+    },
+  };
+  if (firecrawlSettingsEnv.FIRECRAWL_API_URL) {
+    mcpServers.firecrawl = {
+      command: 'node',
+      args: ['/app/node_modules/firecrawl-mcp/dist/index.js'],
+      env: {
+        FIRECRAWL_API_URL: firecrawlSettingsEnv.FIRECRAWL_API_URL,
+        ...(firecrawlSettingsEnv.FIRECRAWL_API_KEY
+          ? { FIRECRAWL_API_KEY: firecrawlSettingsEnv.FIRECRAWL_API_KEY }
+          : {}),
+      },
+    };
+  }
   const baseSettings = {
     env: {
       // Enable agent swarms (subagent orchestration)
@@ -139,13 +166,7 @@ function buildVolumeMounts(
       // https://code.claude.com/docs/en/memory#manage-auto-memory
       CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0',
     },
-    mcpServers: {
-      // Cognee knowledge graph — runs in Docker, published on bridge IP
-      cognee: {
-        url: 'http://172.17.0.1:8765/sse',
-        type: 'sse',
-      },
-    },
+    mcpServers,
   };
 
   if (!fs.existsSync(settingsFile)) {
@@ -263,6 +284,13 @@ async function buildContainerArgs(
   const hostEnv = readEnvFile(['GITHUB_TOKEN']);
   if (hostEnv.GITHUB_TOKEN) {
     args.push('-e', `GITHUB_TOKEN=${hostEnv.GITHUB_TOKEN}`);
+  }
+  const firecrawlEnv = readEnvFile(['FIRECRAWL_API_URL', 'FIRECRAWL_API_KEY']);
+  if (firecrawlEnv.FIRECRAWL_API_URL) {
+    args.push('-e', `FIRECRAWL_API_URL=${firecrawlEnv.FIRECRAWL_API_URL}`);
+  }
+  if (firecrawlEnv.FIRECRAWL_API_KEY) {
+    args.push('-e', `FIRECRAWL_API_KEY=${firecrawlEnv.FIRECRAWL_API_KEY}`);
   }
 
   // OneCLI gateway handles credential injection — containers never see real secrets.

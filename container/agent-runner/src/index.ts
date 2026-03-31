@@ -341,6 +341,7 @@ async function runQuery(
   prompt: string,
   sessionId: string | undefined,
   mcpServerPath: string,
+  firecrawlMcpPath: string,
   containerInput: ContainerInput,
   sdkEnv: Record<string, string | undefined>,
   resumeAt?: string,
@@ -397,6 +398,67 @@ async function runQuery(
     log(`Additional directories: ${extraDirs.join(', ')}`);
   }
 
+  const hasFirecrawl = Boolean(process.env.FIRECRAWL_API_URL);
+  if (hasFirecrawl) {
+    log('Firecrawl MCP enabled');
+  }
+
+  const allowedTools = [
+    'Bash',
+    'Read', 'Write', 'Edit', 'Glob', 'Grep',
+    'WebSearch', 'WebFetch',
+    'Task', 'TaskOutput', 'TaskStop',
+    'TeamCreate', 'TeamDelete', 'SendMessage',
+    'TodoWrite', 'ToolSearch', 'Skill',
+    'NotebookEdit',
+    'mcp__nanoclaw__*',
+    'mcp__gmail__*',
+    'mcp__github__*',
+    'mcp__cognee__*',
+    ...(hasFirecrawl ? ['mcp__firecrawl__*'] : []),
+  ];
+
+  const mcpServers: {
+    [key: string]:
+      | { command: string; args: string[]; env?: Record<string, string> }
+      | { type: 'sse'; url: string };
+  } = {
+    nanoclaw: {
+      command: 'node',
+      args: [mcpServerPath],
+      env: {
+        NANOCLAW_CHAT_JID: containerInput.chatJid,
+        NANOCLAW_GROUP_FOLDER: containerInput.groupFolder,
+        NANOCLAW_IS_MAIN: containerInput.isMain ? '1' : '0',
+      },
+    },
+    gmail: {
+      command: 'gmail-mcp',
+      args: [],
+    },
+    github: {
+      command: 'github-mcp-server',
+      args: ['stdio'],
+      env: { GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GITHUB_TOKEN || '' },
+    },
+    cognee: {
+      type: 'sse',
+      url: process.env.COGNEE_MCP_URL || 'http://host.docker.internal:8765/sse',
+    },
+  };
+  if (hasFirecrawl) {
+    mcpServers.firecrawl = {
+      command: 'node',
+      args: [firecrawlMcpPath],
+      env: {
+        FIRECRAWL_API_URL: process.env.FIRECRAWL_API_URL || '',
+        ...(process.env.FIRECRAWL_API_KEY
+          ? { FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY }
+          : {}),
+      },
+    };
+  }
+
   for await (const message of query({
     prompt: stream,
     options: {
@@ -407,47 +469,12 @@ async function runQuery(
       systemPrompt: globalClaudeMd
         ? { type: 'preset' as const, preset: 'claude_code' as const, append: globalClaudeMd }
         : undefined,
-      allowedTools: [
-        'Bash',
-        'Read', 'Write', 'Edit', 'Glob', 'Grep',
-        'WebSearch', 'WebFetch',
-        'Task', 'TaskOutput', 'TaskStop',
-        'TeamCreate', 'TeamDelete', 'SendMessage',
-        'TodoWrite', 'ToolSearch', 'Skill',
-        'NotebookEdit',
-        'mcp__nanoclaw__*',
-        'mcp__gmail__*',
-        'mcp__github__*',
-        'mcp__cognee__*',
-      ],
+      allowedTools,
       env: sdkEnv,
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
       settingSources: ['project', 'user'],
-      mcpServers: {
-        nanoclaw: {
-          command: 'node',
-          args: [mcpServerPath],
-          env: {
-            NANOCLAW_CHAT_JID: containerInput.chatJid,
-            NANOCLAW_GROUP_FOLDER: containerInput.groupFolder,
-            NANOCLAW_IS_MAIN: containerInput.isMain ? '1' : '0',
-          },
-        },
-        gmail: {
-          command: 'gmail-mcp',
-          args: [],
-        },
-        github: {
-          command: 'github-mcp-server',
-          args: ['stdio'],
-          env: { GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GITHUB_TOKEN || '' },
-        },
-        cognee: {
-          type: 'sse',
-          url: process.env.COGNEE_MCP_URL || 'http://host.docker.internal:8765/sse',
-        },
-      },
+      mcpServers,
       hooks: {
         PreCompact: [{ hooks: [createPreCompactHook(containerInput.assistantName)] }],
       },
@@ -618,6 +645,13 @@ async function main(): Promise<void> {
 
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const mcpServerPath = path.join(__dirname, 'ipc-mcp-stdio.js');
+  const firecrawlMcpPath = path.join(
+    __dirname,
+    'node_modules',
+    'firecrawl-mcp',
+    'dist',
+    'index.js',
+  );
 
   let sessionId = containerInput.sessionId;
   fs.mkdirSync(IPC_INPUT_DIR, { recursive: true });
@@ -673,7 +707,15 @@ async function main(): Promise<void> {
     while (true) {
       log(`Starting query (session: ${sessionId || 'new'}, resumeAt: ${resumeAt || 'latest'})...`);
 
-      const queryResult = await runQuery(prompt, sessionId, mcpServerPath, containerInput, sdkEnv, resumeAt);
+      const queryResult = await runQuery(
+        prompt,
+        sessionId,
+        mcpServerPath,
+        firecrawlMcpPath,
+        containerInput,
+        sdkEnv,
+        resumeAt,
+      );
       if (queryResult.newSessionId) {
         sessionId = queryResult.newSessionId;
       }

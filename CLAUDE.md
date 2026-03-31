@@ -44,6 +44,15 @@ Always follow the workflow:
 3. `cognee_search` when recalling prior memory
 4. If data is sensitive, use OneCLI tools instead of Cognee
 
+## Firecrawl Web Data Strategy
+
+When **`mcp__firecrawl__*`** tools appear in your tool list, use them for structured web data (scrape, search, crawl). If they are not listed, use `WebFetch` / `WebSearch` / `agent-browser` as usual.
+
+- Prefer `firecrawl_scrape` with markdown and main-content filtering for single pages.
+- Use `firecrawl_search` with small limits for discovery before scraping.
+- Reserve heavy `firecrawl_agent`/broad crawl tasks for cases where simpler tools cannot complete the request.
+- Never put API keys or host env values into Cognee; secrets stay on the host.
+
 ## Skills
 
 Four types of skills exist in NanoClaw. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full taxonomy and guidelines.
@@ -78,6 +87,7 @@ npm run build        # Compile TypeScript
 ```
 
 Service management:
+
 ```bash
 # macOS (launchd)
 launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
