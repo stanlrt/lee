@@ -193,7 +193,7 @@ systemctl --user status nanoclaw --no-pager
 tail -f logs/nanoclaw.log
 ```
 
-## 12) Gmail integration (start tool-only)
+## 12) Gmail integration (full channel)
 
 Inside Claude Code:
 
@@ -202,6 +202,7 @@ Inside Claude Code:
 ```
 
 Choose `tool-only` first.
+Choose `channel mode` (full channel).
 
 OAuth setup:
 1. Google Cloud Console -> create/select project
@@ -228,6 +229,10 @@ Functional test from your main chat:
 - Ask assistant to list labels
 - Ask assistant to search recent emails
 
+Additional full-channel validation:
+- Send a new email to the connected inbox and confirm NanoClaw detects it.
+- Confirm your desired trigger behavior for inbound Gmail events (avoid noisy auto-actions).
+
 ## 13) GitHub via MCP (chosen path)
 
 1. Create a fine-grained PAT scoped only to required repos/permissions.
@@ -238,7 +243,7 @@ Test sequence:
 1. Read-only MCP action (list repo metadata/issues)
 2. Controlled write action in a sandbox repo (e.g., create draft issue)
 
-## 14) Cognee installation
+## 14) Cognee installation and NanoClaw integration
 
 On VPS:
 
@@ -268,7 +273,85 @@ GRAPH_DATABASE_PROVIDER="kuzu"
 EOF
 ```
 
-Run a smoke test based on current Cognee quickstart.
+Start Cognee service (Docker):
+
+```bash
+docker run -d \
+  --name cognee \
+  --restart unless-stopped \
+  -p 8000:8000 \
+  --env-file .env \
+  -e ENABLE_BACKEND_ACCESS_CONTROL=false \
+  cognee/cognee:latest
+```
+
+Quick health check:
+
+```bash
+docker ps --filter name=cognee
+curl -sS http://127.0.0.1:8000/ | head
+```
+
+### 14.1) Important: OpenClaw plugin article vs NanoClaw
+
+The Cognee article you shared describes an **OpenClaw plugin lifecycle** (`before_agent_start`, `agent_end`, plugin manifest, etc.).  
+For **NanoClaw**, implement the same behavior directly in core flow (no OpenClaw plugin manifest needed):
+
+- Pre-agent recall hook in `src/index.ts` before agent invocation.
+- Post-agent sync hook in `src/index.ts` after successful run.
+- Optional periodic maintenance in `src/task-scheduler.ts`.
+- Keep HTTP client and mapping logic in a dedicated module (recommended: `src/memory/cognee.ts`).
+
+### 14.2) NanoClaw memory flow to implement
+
+1. **Startup sync**
+   - Scan NanoClaw memory sources (group memory files / curated memory state).
+   - Compute file hashes.
+   - Push only new/changed memory payloads to Cognee dataset.
+2. **Before each agent run**
+   - Query Cognee with user prompt + minimal recent context.
+   - Use graph-capable search mode (equivalent to `GRAPH_COMPLETION` from the article).
+   - Inject only top relevant results into prompt context with strict token budget.
+3. **After each successful agent run**
+   - Re-scan memory files changed by the run.
+   - Upsert changed items to Cognee.
+4. **Scheduled maintenance**
+   - Re-index stale entries.
+   - Compact/merge low-value fragments.
+
+### 14.3) Suggested config contract (NanoClaw-side)
+
+Use env/config entries similar to:
+
+```bash
+COGNEE_BASE_URL="http://127.0.0.1:8000"
+COGNEE_API_KEY="REPLACE_ME_IF_ENABLED"
+COGNEE_DATASET_NAME="nanoclaw-main"
+COGNEE_SEARCH_TYPE="GRAPH_COMPLETION"
+COGNEE_AUTO_RECALL="true"
+COGNEE_AUTO_INDEX="true"
+COGNEE_MAX_RESULTS="8"
+COGNEE_MAX_TOKENS="1200"
+```
+
+Notes:
+- If API key auth is disabled locally, keep access bound to localhost/firewall.
+- Separate dataset per scope (recommended): `group:<id>` or `workspace:<name>` to avoid cross-group bleed.
+
+### 14.4) Validation checklist (NanoClaw-specific)
+
+1. Trigger one conversation that should create memory.
+2. Trigger a second conversation that should recall that memory.
+3. Confirm recall quality in logs and response content.
+4. Confirm unrelated group/topic data is not retrieved.
+
+Useful checks:
+
+```bash
+docker logs --tail 200 cognee
+systemctl --user status nanoclaw --no-pager
+tail -f logs/nanoclaw.log
+```
 
 ## 15) Reboot and recovery validation
 
@@ -284,21 +367,111 @@ docker ps
 ```
 
 Then verify end-to-end:
+
 - Telegram prompt gets response
 - Gmail tools still work
+- 
 - GitHub MCP still authenticates
-- Cognee retrieval test passes
+- Cognee retrieval test passes (create -> recall -> isolation checks)
 
 ## 16) Operations baseline
 
 - Backup targets:
   - NanoClaw project state directories
   - `~/.gmail-mcp/`
-  - Cognee data directories
+  - Cognee data directories / dataset exports
 - Keep monthly update cadence:
   - NanoClaw core + skills
   - OS package patches
   - token hygiene and rotation checks
+
+## 17) Smart model routing (LiteLLM + optional OpenRouter)
+
+Decision:
+- Use **LiteLLM** as the routing gateway (self-hosted on VPS).
+- Use direct providers and optionally **OpenRouter** as an upstream source of additional models.
+- Keep **Portkey out** for now.
+
+Why this choice:
+- Lowest lock-in and good cost control for long-term operation.
+- Easy to add fallback, retry, and budget policies.
+- Works with your goal of using cheap models for simple tasks and stronger models for complex reasoning.
+
+### 17.1) Deploy LiteLLM on VPS
+
+Example (quick start):
+
+```bash
+docker run -d \
+  --name litellm \
+  --restart unless-stopped \
+  -p 4000:4000 \
+  -e LITELLM_MASTER_KEY="REPLACE_ME" \
+  -e OPENAI_API_KEY="REPLACE_ME_IF_USED" \
+  -e ANTHROPIC_API_KEY="REPLACE_ME_IF_USED" \
+  -e OPENROUTER_API_KEY="REPLACE_ME_IF_USED" \
+  ghcr.io/berriai/litellm:main-latest \
+  --port 4000
+```
+
+Health check:
+
+```bash
+docker ps --filter name=litellm
+curl -sS http://127.0.0.1:4000/health
+```
+
+### 17.2) Routing policy (NanoClaw-side)
+
+Implement three complexity tiers in NanoClaw:
+
+- `simple`: short factual/chat/tool-routing tasks -> cheap fast model
+- `standard`: normal coding/help tasks -> mid-cost model
+- `complex`: architecture, deep debugging, high-risk edits -> strong reasoning model
+
+Recommended escalation:
+- Start at tier-selected model.
+- Escalate one tier up on failure, low confidence, or tool/result ambiguity.
+
+### 17.3) Integration points in NanoClaw
+
+- Add/extend provider abstraction (recommended file: `src/model-router.ts`).
+- Apply routing before agent invocation in `src/index.ts`.
+- Keep Cognee retrieval and summarization on cheaper tiers where quality is acceptable.
+- Reserve expensive models primarily for final synthesis on hard tasks.
+
+### 17.4) Config contract (example)
+
+```bash
+MODEL_ROUTING_ENABLED="true"
+MODEL_ROUTING_DEFAULT_TIER="standard"
+LITELLM_BASE_URL="http://127.0.0.1:4000"
+LITELLM_API_KEY="REPLACE_ME"
+
+MODEL_SIMPLE="openrouter/<cheap-fast-model>"
+MODEL_STANDARD="openrouter/<mid-model>"
+MODEL_COMPLEX="anthropic/<thinking-model>"
+
+MODEL_ESCALATION_ENABLED="true"
+MODEL_MAX_ESCALATIONS="1"
+MODEL_REQUEST_TOKEN_CAP="3500"
+MODEL_DAILY_BUDGET_USD="REPLACE_ME"
+```
+
+### 17.5) Validation checklist
+
+1. Send 5 trivial prompts and confirm simple tier is used.
+2. Send 5 normal prompts and confirm standard tier is used.
+3. Send 3 hard prompts and confirm complex tier (or escalation) is used.
+4. Force one provider failure and verify fallback/escalation behavior.
+5. Confirm daily budget and token caps are enforced.
+
+Useful checks:
+
+```bash
+docker logs --tail 200 litellm
+tail -f logs/nanoclaw.log
+```
 
 ## Current policy notes to keep in mind
 
