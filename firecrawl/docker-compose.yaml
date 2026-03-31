@@ -12,11 +12,37 @@ services:
       - PORT=3002
       - USE_DB_AUTHENTICATION=false
       - REDIS_URL=redis://redis:6379
+      - NUQ_DATABASE_URL=postgresql://firecrawl:firecrawl@postgres:5432/firecrawl
+      - NUQ_RABBITMQ_URL=amqp://firecrawl:firecrawl@rabbitmq:5672
     depends_on:
       - redis
+      - postgres
+      - rabbitmq
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     container_name: firecrawl-redis
     restart: unless-stopped
+
+  postgres:
+    image: ghcr.io/firecrawl/nuq-postgres:latest
+    container_name: firecrawl-postgres
+    environment:
+      - POSTGRES_USER=firecrawl
+      - POSTGRES_PASSWORD=firecrawl
+      - POSTGRES_DB=firecrawl
+    volumes:
+      - firecrawl-postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: firecrawl-rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=firecrawl
+      - RABBITMQ_DEFAULT_PASS=firecrawl
+    restart: unless-stopped
+
+volumes:
+  firecrawl-postgres-data:
