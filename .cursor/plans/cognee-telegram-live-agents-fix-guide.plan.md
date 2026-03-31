@@ -1,3 +1,10 @@
+---
+name: ""
+overview: ""
+todos: []
+isProject: false
+---
+
 # Cognee Tools Missing in Telegram Live Agents - Fix Guide
 
 This guide fixes the issue where Telegram live agents do not see Cognee tools.
@@ -28,6 +35,7 @@ cognee: {
 ```
 
 Notes:
+
 - This keeps behavior configurable using `COGNEE_MCP_URL`.
 - If your runtime cannot resolve `host.docker.internal`, set:
   - `COGNEE_MCP_URL=http://172.17.0.1:8765/sse`
@@ -39,10 +47,10 @@ For consistency with runtime defaults, you can also align the generated per-grou
 ## Verification Checklist
 
 1. Start or restart the Cognee MCP service:
-   - `docker compose -f cognee/docker-compose.yaml up -d`
+  - `docker compose -f cognee/docker-compose.yaml up -d`
 2. Restart NanoClaw so new agent-runner config is active.
 3. In Telegram, send a prompt that forces tool discovery/use, for example:
-   - "List available Cognee tools and then run a small Cognee query."
+  - "List available Cognee tools and then run a small Cognee query."
 4. Confirm logs show Cognee MCP registration and/or tool calls.
 5. Confirm agent response references successful `mcp__cognee__*` tool execution.
 
