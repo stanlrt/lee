@@ -8,22 +8,41 @@ Single Node.js process with skill-based channel system. Channels (WhatsApp, Tele
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `src/index.ts` | Orchestrator: state, message loop, agent invocation |
-| `src/channels/registry.ts` | Channel registry (self-registration at startup) |
-| `src/ipc.ts` | IPC watcher and task processing |
-| `src/router.ts` | Message formatting and outbound routing |
-| `src/config.ts` | Trigger pattern, paths, intervals |
-| `src/container-runner.ts` | Spawns agent containers with mounts |
-| `src/task-scheduler.ts` | Runs scheduled tasks |
-| `src/db.ts` | SQLite operations |
-| `groups/{name}/CLAUDE.md` | Per-group memory (isolated) |
-| `container/skills/` | Skills loaded inside agent containers (browser, status, formatting) |
+| File                       | Purpose                                                             |
+| -------------------------- | ------------------------------------------------------------------- |
+| `src/index.ts`             | Orchestrator: state, message loop, agent invocation                 |
+| `src/channels/registry.ts` | Channel registry (self-registration at startup)                     |
+| `src/ipc.ts`               | IPC watcher and task processing                                     |
+| `src/router.ts`            | Message formatting and outbound routing                             |
+| `src/config.ts`            | Trigger pattern, paths, intervals                                   |
+| `src/container-runner.ts`  | Spawns agent containers with mounts                                 |
+| `src/task-scheduler.ts`    | Runs scheduled tasks                                                |
+| `src/db.ts`                | SQLite operations                                                   |
+| `groups/{name}/CLAUDE.md`  | Per-group memory (isolated)                                         |
+| `container/skills/`        | Skills loaded inside agent containers (browser, status, formatting) |
 
 ## Secrets / Credentials / Proxy (OneCLI)
 
 API keys, secret keys, OAuth tokens, and auth credentials are managed by the OneCLI gateway — which handles secret injection into containers at request time, so no keys or tokens are ever passed to containers directly. Run `onecli --help`.
+
+## Cognee Memory Strategy
+
+Use Cognee for durable, user-specific memory that should persist across sessions.
+
+- **When to store:** user explicitly says "remember", or the fact is clearly long-lived and useful.
+- **What to store:** preferences, stable profile facts, recurring constraints, project context, and decisions.
+- **What not to store:** secrets, credentials, API keys, passwords, private keys, temporary task state, or one-off chatter.
+- **Sensitive personal data:** ask for confirmation before storing unless the user explicitly requested storage.
+- **Sensitive data handling:** store sensitive values in OneCLI only; in Cognee store only non-secret references (for example, vault key names or where to retrieve the secret).
+- **Tool routing for secrets:** use OneCLI via the CLI/workflows (`onecli secrets ...`, `/init-onecli`) for create/read/update/delete of sensitive values; never send raw secret values to Cognee.
+- **OneCLI command patterns:** use `onecli secrets list` to inspect secrets, `onecli secrets create --name <Name> --type <type> --value <value> --host-pattern <host>` to add a secret, and `/init-onecli` when setup/migration is needed.
+
+Always follow the workflow:
+
+1. `cognee_add` with clear, structured facts
+2. `cognee_cognify` so data becomes queryable
+3. `cognee_search` when recalling prior memory
+4. If data is sensitive, use OneCLI tools instead of Cognee
 
 ## Skills
 
@@ -34,15 +53,15 @@ Four types of skills exist in NanoClaw. See [CONTRIBUTING.md](CONTRIBUTING.md) f
 - **Operational skills** — instruction-only workflows, always on `main` (e.g. `/setup`, `/debug`)
 - **Container skills** — loaded inside agent containers at runtime (`container/skills/`)
 
-| Skill | When to Use |
-|-------|-------------|
-| `/setup` | First-time installation, authentication, service configuration |
-| `/customize` | Adding channels, integrations, changing behavior |
-| `/debug` | Container issues, logs, troubleshooting |
-| `/update-nanoclaw` | Bring upstream NanoClaw updates into a customized install |
-| `/init-onecli` | Install OneCLI Agent Vault and migrate `.env` credentials to it |
-| `/qodo-pr-resolver` | Fetch and fix Qodo PR review issues interactively or in batch |
-| `/get-qodo-rules` | Load org- and repo-level coding rules from Qodo before code tasks |
+| Skill               | When to Use                                                       |
+| ------------------- | ----------------------------------------------------------------- |
+| `/setup`            | First-time installation, authentication, service configuration    |
+| `/customize`        | Adding channels, integrations, changing behavior                  |
+| `/debug`            | Container issues, logs, troubleshooting                           |
+| `/update-nanoclaw`  | Bring upstream NanoClaw updates into a customized install         |
+| `/init-onecli`      | Install OneCLI Agent Vault and migrate `.env` credentials to it   |
+| `/qodo-pr-resolver` | Fetch and fix Qodo PR review issues interactively or in batch     |
+| `/get-qodo-rules`   | Load org- and repo-level coding rules from Qodo before code tasks |
 
 ## Contributing
 
