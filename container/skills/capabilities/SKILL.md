@@ -34,24 +34,21 @@ Each directory is an installed skill. The directory name is the skill name (e.g.
 
 ### 2. Available tools
 
-Read the allowed tools from your SDK configuration. You always have access to:
+You always have access to:
 - **Core:** Bash, Read, Write, Edit, Glob, Grep
 - **Web:** WebSearch, WebFetch (use ONLY if mcp__firecrawl__* tools are not available)
 - **Orchestration:** Task, TaskOutput, TaskStop, TeamCreate, TeamDelete, SendMessage
 - **Other:** TodoWrite, ToolSearch, Skill, NotebookEdit
-- **MCP:** mcp__nanoclaw__* (messaging, tasks, group management)
 
-### 3. MCP server tools
+### 3. MCP tools (dynamic)
 
-The NanoClaw MCP server exposes these tools (via `mcp__nanoclaw__*` prefix):
-- `send_message` — send a message to the user/group
-- `schedule_task` — schedule a recurring or one-time task
-- `list_tasks` — list scheduled tasks
-- `pause_task` — pause a scheduled task
-- `resume_task` — resume a paused task
-- `cancel_task` — cancel and delete a task
-- `update_task` — update an existing task
-- `register_group` — register a new chat/group (main only)
+Use `ToolSearch` to discover all available MCP tools at runtime:
+
+```
+ToolSearch: "mcp"
+```
+
+Group results by MCP server prefix (e.g. `mcp__nanoclaw__*`, `mcp__firecrawl__*`). List each server and its tools in the report. This ensures the report reflects what's actually loaded, not a hardcoded list.
 
 ### 4. Container skills (Bash tools)
 
@@ -84,7 +81,9 @@ Present the report as a clean, readable message. Example:
 • Core: Bash, Read, Write, Edit, Glob, Grep
 • Web: WebSearch, WebFetch
 • Orchestration: Task, TeamCreate, SendMessage
-• MCP: send_message, schedule_task, list_tasks, pause/resume/cancel/update_task, register_group
+• MCP (nanoclaw): send_message, schedule_task, list_tasks, ...
+• MCP (firecrawl): firecrawl_scrape, firecrawl_search, ...
+(list whatever ToolSearch actually returns)
 
 *Container Tools:*
 • agent-browser: ✓

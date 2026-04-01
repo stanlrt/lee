@@ -7,7 +7,8 @@ Create `.env` in the project root:
 ```env
 ASSISTANT_NAME=Nanolee
 TELEGRAM_BOT_TOKEN=        # from @BotFather
-FIRECRAWL_API_URL=http://<host>:3002
+FIRECRAWL_API_URL=http://172.17.0.1:3002
+COGNEE_MCP_URL=http://172.17.0.1:8765/sse
 ONECLI_URL=http://localhost:10254   # OneCLI credential gateway
 TZ=Europe/Paris            # optional, for scheduler
 ```
@@ -61,7 +62,61 @@ sudo systemctl start nanoclaw
 
 Always use `systemctl` to manage the service — never `nohup` or manual node invocations alongside it.
 
-## 5. Set up Firecrawl
+If the service hangs on restart (stuck waiting for sudo password or never completing), a container is still running. Kill it first:
+
+```bash
+docker ps --filter "name=nanoclaw" -q | xargs -r docker kill
+sudo systemctl restart nanoclaw --no-pager
+```
+
+## 5. Start background services
+
+### LiteLLM proxy
+
+Agent containers route all LLM calls through LiteLLM (Gemini Flash by default, Anthropic for heavy tasks).
+
+Create `litellm/.env` (gitignored — must be recreated on each VPS):
+
+```env
+GEMINI_API_KEY=...
+ANTHROPIC_API_KEY=...
+```
+
+Then start it:
+
+```bash
+cd litellm && docker compose up -d
+```
+
+Verify: `curl -s http://172.17.0.1:4000/health`
+
+The bot will silently hang (typing indicator but no reply) if LiteLLM isn't running.
+
+### Cognee MCP (memory)
+
+Create an empty `cognee/.env` (gitignored — required even if empty):
+
+```bash
+touch cognee/.env
+```
+
+Install Python deps into the host venv (mounted into the container):
+
+```bash
+sudo apt install -y python3-venv python3-pip
+python3 -m venv cognee/.venv
+cognee/.venv/bin/pip install -r cognee/requirements.txt
+```
+
+Then build and start:
+
+```bash
+cd cognee && docker compose up -d --build
+```
+
+The first build takes a few minutes. Subsequent starts are fast.
+
+## 6. Set up Firecrawl
 
 See `firecrawl/README.md`.
 

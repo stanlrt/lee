@@ -49,13 +49,15 @@ You have access to a Cognee MCP server (`cognee_add`, `cognee_cognify`, `cognee_
 
 **Use Cognee when:**
 - The user asks you to "remember" something for future reference
+- You learn a URL, project name, repo, or resource the user wants you to recall later
 - You're storing knowledge with relationships (people, projects, concepts and how they connect)
 - You need to query across a large body of accumulated knowledge semantically
 
 **Don't use Cognee for:**
-- Simple one-off facts — just write a file
 - Conversation history — that's already in `conversations/`
 - Temporary task state
+
+**Default:** when in doubt whether to write a file or use Cognee, prefer Cognee for anything the user might ask about in a future session.
 
 **Workflow:** always `cognee_add` → `cognee_cognify` → later `cognee_search`. Skipping `cognee_cognify` means data is ingested but not yet queryable as a graph.
 

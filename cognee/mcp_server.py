@@ -13,10 +13,14 @@ _project_root = Path(__file__).parent.parent
 load_dotenv(_project_root / ".env")
 load_dotenv(Path(__file__).parent / ".env", override=True)
 
-# Map shared provider keys to cognee's expected LLM_API_KEY / EMBEDDING_API_KEY
+# Map shared provider keys to cognee's expected LLM config env vars
 _gemini_key = os.environ.get("GEMINI_API_KEY", "")
 os.environ.setdefault("LLM_API_KEY", _gemini_key)
+os.environ.setdefault("LLM_PROVIDER", "gemini")
+os.environ.setdefault("LLM_MODEL", "gemini/gemini-2.5-flash")
 os.environ.setdefault("EMBEDDING_API_KEY", _gemini_key)
+os.environ.setdefault("EMBEDDING_PROVIDER", "gemini")
+os.environ.setdefault("EMBEDDING_MODEL", "gemini/gemini-embedding-001")
 
 # Redirect storage out of the venv
 _data_dir = Path(__file__).parent / "data"
@@ -60,12 +64,17 @@ async def cognee_search(
     search_type options: GRAPH_COMPLETION, RAG_COMPLETION, CHUNKS, SUMMARIES, CODE, FEELING_LUCKY
     """
     st = cognee.SearchType[search_type]
-    results = await cognee.search(
-        query,
-        query_type=st,
-        datasets=[dataset_name],
-        top_k=top_k,
-    )
+    try:
+        results = await cognee.search(
+            query,
+            query_type=st,
+            datasets=[dataset_name],
+            top_k=top_k,
+        )
+    except Exception as e:
+        if "not created" in str(e).lower() or "precondition" in str(e).lower() or "no database" in str(e).lower():
+            return "No results found (knowledge graph is empty)."
+        raise
     if not results:
         return "No results found."
     return "\n\n".join(str(r) for r in results)
