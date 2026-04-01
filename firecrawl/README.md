@@ -158,6 +158,8 @@ docker compose down -v --remove-orphans
 
 ## Notes / Gotchas
 
+- After `docker compose up -d` or `--force-recreate firecrawl-api`, wait **15–30s** before `curl http://172.17.0.1:3002/` — the process starts many workers first; an immediate `curl` often returns `000`.
+- If logs show **`127.0.0.1:6379` / Session Rate Limit Store** errors, NanoClaw’s **`../.env`** is probably setting **`REDIS_RATE_LIMIT_URL`** to localhost. [`docker-compose.yaml`](docker-compose.yaml) forces **`REDIS_RATE_LIMIT_URL=redis://redis:6379`** so it matches the compose Redis service; run `docker compose up -d --force-recreate firecrawl-api` after pulling the change.
 - `curl http://127.0.0.1:3002` can fail while service is healthy, because bind is on `172.17.0.1`.
 - `AUTUMN_SECRET_KEY` and Supabase warnings are expected in basic self-host mode.
 - If Firecrawl API image fails to pull for a specific tag, revert to `latest` or use a verified GHCR tag.
