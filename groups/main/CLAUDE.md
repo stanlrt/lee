@@ -141,6 +141,7 @@ Key paths inside the container:
 - `/workspace/project/store/messages.db` - SQLite database
 - `/workspace/project/store/messages.db` (registered_groups table) - Group config
 - `/workspace/project/groups/` - All group folders
+- `/workspace/group/attachments/` - Files sent via Telegram (documents, etc.) are saved here. When a message says `[Document: filename — saved to /workspace/group/attachments/filename]`, read it from that path.
 
 ---
 

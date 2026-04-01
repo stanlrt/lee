@@ -1,10 +1,13 @@
+import fs from 'fs';
 import https from 'https';
+import path from 'path';
 import { Api, Bot } from 'grammy';
 import { transcribeAudio } from '../transcription.js';
 
 import { ASSISTANT_NAME, TRIGGER_PATTERN } from '../config.js';
 import { readEnvFile } from '../env.js';
 import { logger } from '../logger.js';
+import { GROUPS_DIR } from '../config.js';
 import { registerChannel, ChannelOpts } from './registry.js';
 import {
   Channel,
@@ -232,9 +235,36 @@ export class TelegramChannel implements Channel {
       storeNonText(ctx, placeholder);
     });
     this.bot.on('message:audio', (ctx) => storeNonText(ctx, '[Audio]'));
-    this.bot.on('message:document', (ctx) => {
-      const name = ctx.message.document?.file_name || 'file';
-      storeNonText(ctx, `[Document: ${name}]`);
+    this.bot.on('message:document', async (ctx) => {
+      const chatJid = `tg:${ctx.chat.id}`;
+      const group = this.opts.registeredGroups()[chatJid];
+      if (!group) return;
+
+      const doc = ctx.message.document;
+      const name = doc?.file_name || 'file';
+      let placeholder = `[Document: ${name}]`;
+
+      try {
+        const file = await ctx.api.getFile(doc.file_id);
+        const fileUrl = `https://api.telegram.org/file/bot${this.botToken}/${file.file_path}`;
+        const attachmentsDir = path.join(GROUPS_DIR, group.folder, 'attachments');
+        fs.mkdirSync(attachmentsDir, { recursive: true });
+        const destPath = path.join(attachmentsDir, name);
+        await new Promise<void>((resolve, reject) => {
+          const dest = fs.createWriteStream(destPath);
+          https.get(fileUrl, (res) => {
+            res.pipe(dest);
+            dest.on('finish', () => { dest.close(); resolve(); });
+            dest.on('error', reject);
+          }).on('error', reject);
+        });
+        placeholder = `[Document: ${name} — saved to /workspace/group/attachments/${name}]`;
+        logger.info({ chatJid, name }, 'Telegram document saved');
+      } catch (err) {
+        logger.error({ err, name }, 'Failed to download Telegram document');
+      }
+
+      storeNonText(ctx, placeholder);
     });
     this.bot.on('message:sticker', (ctx) => {
       const emoji = ctx.message.sticker?.emoji || '';
