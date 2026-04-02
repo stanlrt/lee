@@ -241,25 +241,36 @@ export class TelegramChannel implements Channel {
       if (!group) return;
 
       const doc = ctx.message.document;
-      const name = doc?.file_name || 'file';
-      let placeholder = `[Document: ${name}]`;
+      const originalName = doc?.file_name || 'file';
+      // Sanitize: replace spaces and special chars with underscores, keep extension
+      const name = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      let placeholder = `[Document: ${originalName}]`;
 
       try {
         const file = await ctx.api.getFile(doc.file_id);
         const fileUrl = `https://api.telegram.org/file/bot${this.botToken}/${file.file_path}`;
-        const attachmentsDir = path.join(GROUPS_DIR, group.folder, 'attachments');
+        const attachmentsDir = path.join(
+          GROUPS_DIR,
+          group.folder,
+          'attachments',
+        );
         fs.mkdirSync(attachmentsDir, { recursive: true });
         const destPath = path.join(attachmentsDir, name);
         await new Promise<void>((resolve, reject) => {
           const dest = fs.createWriteStream(destPath);
-          https.get(fileUrl, (res) => {
-            res.pipe(dest);
-            dest.on('finish', () => { dest.close(); resolve(); });
-            dest.on('error', reject);
-          }).on('error', reject);
+          https
+            .get(fileUrl, (res) => {
+              res.pipe(dest);
+              dest.on('finish', () => {
+                dest.close();
+                resolve();
+              });
+              dest.on('error', reject);
+            })
+            .on('error', reject);
         });
-        placeholder = `[Document: ${name} — saved to /workspace/group/attachments/${name}]`;
-        logger.info({ chatJid, name }, 'Telegram document saved');
+        placeholder = `[Document: ${originalName} — saved to /workspace/group/attachments/${name}]`;
+        logger.info({ chatJid, name, originalName }, 'Telegram document saved');
       } catch (err) {
         logger.error({ err, name }, 'Failed to download Telegram document');
       }
