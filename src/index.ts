@@ -810,6 +810,17 @@ async function main(): Promise<void> {
         writeTasksSnapshot(group.folder, group.isMain === true, taskRows);
       }
     },
+    triggerCompact: async (groupFolder: string) => {
+      const group = Object.values(registeredGroups).find(g => g.folder === groupFolder);
+      if (!group) {
+        logger.warn({ groupFolder }, 'compact_session: group not found');
+        return;
+      }
+      const jid = Object.entries(registeredGroups).find(([, g]) => g.folder === groupFolder)?.[0];
+      if (!jid) return;
+      logger.info({ groupFolder }, 'Triggering /compact via IPC');
+      await runAgent(group, '/compact', jid);
+    },
   });
   queue.setProcessMessagesFn(processGroupMessages);
   recoverPendingMessages();

@@ -150,4 +150,54 @@ sudo systemctl status nanoclaw
 journalctl -u nanoclaw -f
 ```
 
+## What needs a restart when you change things
+
+The system has three independent layers. Each has its own reload mechanism.
+
+### 1. Agent containers (`nanoclaw-{group}-*`)
+
+Containers are spawned per conversation and killed after idle. **Just kill the running container** — the next message spawns a fresh one with your changes.
+
+| What changed | Command |
+|---|---|
+| `groups/*/CLAUDE.md` | `nc-kill` |
+| `groups/global/CLAUDE.md` | `nc-kill` |
+| Skills (`data/sessions/*/skills/`) | `nc-kill` |
+| `ipc-mcp-stdio.ts` (MCP tools) | `nc-deploy-mcp` (copies to session dirs, then kills) |
+| Scheduled task prompt (DB) | nothing — read at fire time |
+| Session history / model switch | `nc-apply-model` (clears sessions + kills) |
+
+### 2. LiteLLM proxy (`litellm-proxy` Docker container)
+
+`docker restart` does **not** reload config or env. Must recreate:
+
+| What changed | Command |
+|---|---|
+| `litellm/config.yaml` (model, hooks) | `nc-apply-model` or `cd litellm && docker compose down && up -d` |
+| `litellm/.env` (API keys) | same as above |
+
+### 3. NanoClaw service (systemd)
+
+Holds registered groups and sessions in memory. Requires a full restart to reload from DB.
+
+| What changed | Command |
+|---|---|
+| `src/*.ts` (host code) | `npm run build` then `nc-restart` |
+| `.env` (host env vars) | `nc-restart` |
+| DB edits to `registered_groups` (e.g. `is_main`) | `nc-restart` |
+
+> **Rule of thumb:** if you edited something inside a container (CLAUDE.md, skills, MCP tools) → `nc-kill`. If you edited LiteLLM config → `nc-apply-model`. If you edited host source or DB structure → `nc-restart`.
+
+### Aliases quick reference
+
+```bash
+nc-kill          # kill running agent containers
+nc-restart       # kill containers + restart nanoclaw service
+nc-deploy-mcp    # deploy ipc-mcp-stdio.ts to all sessions + kill containers
+nc-apply-model   # recreate LiteLLM + clear sessions + kill containers
+nc-build         # rebuild container image + deploy MCP + kill containers
+nc-status        # last 50 nanoclaw log lines
+nc-logs          # live log tail
+```
+
 If the service shows active but the bot doesn't respond, check the logs — the container image may be missing or OneCLI may be unreachable.

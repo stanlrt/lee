@@ -1,9 +1,9 @@
 model_list:
-  # Default agent model: Gemini Flash behind a Claude alias.
-  # The Claude Agent SDK sends this model name; LiteLLM transparently routes to Gemini.
+  # Default agent model: Mistral Small behind a Claude alias.
+  # The Claude Agent SDK sends this model name; LiteLLM transparently routes to Mistral.
   - model_name: claude-haiku-4-5-20251001
     litellm_params:
-      model: gemini/gemini-2.5-flash-lite
+      model: gemini/gemini-2.5-flash
       api_key: os.environ/GEMINI_API_KEY
 
   # Heavy lifting: Claude Sonnet 4.5 via Anthropic directly.
@@ -15,6 +15,7 @@ model_list:
 litellm_settings:
   drop_params: true          # ignore unsupported params (e.g. Claude-specific flags)
   request_timeout: 120
+  # callbacks: ["hooks.StripThinkingBlocks"]  # re-enable when switching to non-Claude models
 
 general_settings:
   # No master_key — LiteLLM is bound to the Docker bridge (172.17.0.1) only,

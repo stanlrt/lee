@@ -23,6 +23,7 @@ export interface IpcDeps {
     registeredJids: Set<string>,
   ) => void;
   onTasksChanged: () => void;
+  triggerCompact: (groupFolder: string) => Promise<void>;
 }
 
 let ipcWatcherRunning = false;
@@ -422,6 +423,16 @@ export async function processTaskIpc(
           'Unauthorized refresh_groups attempt blocked',
         );
       }
+      break;
+
+    case 'compact_session':
+      // Only the group's own agent (or main) can compact its session
+      if (!isMain && data.groupFolder !== sourceGroup) {
+        logger.warn({ sourceGroup, groupFolder: data.groupFolder }, 'Unauthorized compact_session attempt blocked');
+        break;
+      }
+      logger.info({ sourceGroup }, 'Compact session requested via IPC');
+      await deps.triggerCompact(sourceGroup);
       break;
 
     case 'register_group':

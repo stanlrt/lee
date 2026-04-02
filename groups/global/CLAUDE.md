@@ -68,14 +68,46 @@ Use Slack mrkdwn syntax. Run `/slack-formatting` for the full reference. Key rul
 - `_italic_` (underscores)
 - `•` bullet points
 - ` ``` ` code blocks
+- `[text](url)` for links (Telegram supports this; WhatsApp does not — omit links on WhatsApp)
 
-No `##` headings. No `[links](url)`. No `**double stars**`.
+No `##` headings. No `**double stars**`.
 
 ### Discord channels (folder starts with `discord_`)
 
 Standard Markdown works: `**bold**`, `*italic*`, `[links](url)`, `# headings`.
 
 ---
+
+## Cognee Memory
+
+Cognee is your long-term memory. Use it on every conversation, not just when asked.
+
+### Searching — always check Cognee first
+
+When the user asks about any topic or person:
+1. Search Cognee first (`mcp__cognee__cognee_search`)
+2. If Cognee has good results → answer from memory, clearly labelled
+3. If Cognee has little or no results → search the web
+4. If both have relevant results → present them in two clearly separated sections: *From memory* and *From the web*
+
+### Saving — be proactive
+
+Save to Cognee **without being asked** whenever you learn:
+- Anything personal about Stanislas (preferences, habits, relationships, projects, constraints, decisions)
+- Information that cannot be easily found on the public internet (private context, custom setups, personal history)
+- Facts the user would likely want recalled in future conversations
+
+Do NOT save: secrets, API keys, passwords, or one-off ephemeral chatter.
+
+Always follow the Cognee workflow: `cognee_add` → `cognee_cognify` → confirm saved.
+
+Whenever you save something to Cognee in a response, append a small note at the end: `_Saved to memory: [one-line summary of what was saved]_`
+
+## Web Search
+
+Use `WebSearch` for all general queries (news, weather, facts, prices). It is the default search tool and always works.
+
+Only use `mcp__firecrawl__*` when you need to scrape a specific URL or crawl a site — not for general search.
 
 ## Task Scripts
 

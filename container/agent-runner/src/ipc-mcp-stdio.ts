@@ -193,6 +193,36 @@ server.tool(
 );
 
 server.tool(
+  'get_task',
+  'Get the full details of a scheduled task by ID, including the complete prompt.',
+  { task_id: z.string().describe('The task ID to retrieve') },
+  async (args) => {
+    const tasksFile = path.join(IPC_DIR, 'current_tasks.json');
+
+    try {
+      if (!fs.existsSync(tasksFile)) {
+        return { content: [{ type: 'text' as const, text: 'No scheduled tasks found.' }] };
+      }
+
+      const allTasks = JSON.parse(fs.readFileSync(tasksFile, 'utf-8'));
+      const task = allTasks.find((t: { id: string; groupFolder: string }) =>
+        t.id === args.task_id && (isMain || t.groupFolder === groupFolder)
+      );
+
+      if (!task) {
+        return { content: [{ type: 'text' as const, text: `Task ${args.task_id} not found.` }] };
+      }
+
+      return { content: [{ type: 'text' as const, text: JSON.stringify(task, null, 2) }] };
+    } catch (err) {
+      return {
+        content: [{ type: 'text' as const, text: `Error reading task: ${err instanceof Error ? err.message : String(err)}` }],
+      };
+    }
+  },
+);
+
+server.tool(
   'pause_task',
   'Pause a scheduled task. It will not run until resumed.',
   { task_id: z.string().describe('The task ID to pause') },
@@ -298,6 +328,21 @@ server.tool(
     writeIpcFile(TASKS_DIR, data);
 
     return { content: [{ type: 'text' as const, text: `Task ${args.task_id} update requested.` }] };
+  },
+);
+
+server.tool(
+  'compact_session',
+  'Compact the current group\'s conversation session to reduce context size. Use at the end of long sessions or after a memory scan. The host will trigger /compact on the group\'s active session.',
+  {},
+  async () => {
+    const data = {
+      type: 'compact_session',
+      groupFolder,
+      timestamp: new Date().toISOString(),
+    };
+    writeIpcFile(TASKS_DIR, data);
+    return { content: [{ type: 'text' as const, text: 'Session compaction requested.' }] };
   },
 );
 
